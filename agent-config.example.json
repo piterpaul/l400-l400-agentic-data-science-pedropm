@@ -1,0 +1,18 @@
+{
+    "description-of-this-file": "Template for agent-config.json. Running 'source deploy.sh' automatically creates your local (gitignored) agent-config.json from this template and populates your provisioned GCP project, buckets, datasets, and regions.",
+    "random_string": "Set by the agent",
+    "gcp-project-id": "l400-agentic-ds-{random_string}",
+    "user_email": "Set by deploy.sh",
+    "bigquery-region": "US",
+    "spark-region": "us-central1",
+    "vertex-ai-region": "us-central1",
+    "tier0-bigquery-dataset": "citibike_tier0",
+    "bigquery-dataset": "l400_ds_work",
+    "gemini-region": "global",
+    "conversational-analytics-region": "global",
+    "tier0-data-agent-id": "citibike_tier0_agent",
+    "gcs-data-bucket": "l400-agentic-ds-data-{random_string}",
+    "gcs-code-bucket": "l400-agentic-ds-code-{random_string}",
+    "selected-problem-id": "",
+    "selected-tier": ""
+}

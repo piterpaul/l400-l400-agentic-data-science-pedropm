@@ -1,0 +1,839 @@
+---
+schema_version: "1.0"
+problem_id: "marketing-measurement"
+target_tier: 1
+recommended_rung: 1
+source: "built-in-classroom-pack"
+---
+
+# Discovery pack — Marketing Measurement & Incrementality
+
+`marketing-measurement` · recorded by **classroom-repo** · version 1 · served 2026-10-27T00:00:00Z
+
+Every sentence below was authored in the L400 discovery catalog and selected by the answers a customer engineer recorded in the room. None of it was generated. Where an answer is missing, this pack says so and tells you to go and ask.
+
+**How the tiers work.** Tier 0 to Tier 4, cheapest first. An answer never scores a problem; it sets a floor ("not below this rung") or a ceiling ("above this is theatre"). Two answers can set a floor above a ceiling, and that contradiction is a finding, not an error.
+
+**Why the order.** Questions marked keystone are asked of every customer and asked first, because each one opens or closes a branch of the rest.
+
+> ### 🤖 Agent Directives: System Architecture & Solution Design
+> - **Role:** Principal Google Cloud Solutions Architect pair-programming with a Customer Engineer.
+> - **Objective:** Author a tailored, production-grade `DESIGN.md` for this customer engagement.
+> - **Directives:**
+>   1. **Primary Target:** Focus the MVP architecture on the recommended tier in Section 6.
+>   2. **Adjacent Tier ADR:** Do not design in isolation. Explicitly contrast the chosen rung with its adjacent alternatives using the ADR Matrix in Section 6, establishing either an A/B comparison or a Phase 2 migration trigger.
+>   3. **Honor Customer Constraints:** Adhere strictly to the bounded floor, ceiling, latency clock, and operational ownership recorded below.
+>   4. **No Hallucinated Infrastructure:** Propose only Google Cloud components compatible with this tier's operational model.
+>   5. **Pre-Trained vs. Custom-Trained Balance:** Treat pre-trained foundation models (`AI.FORECAST` `TimesFM 2.5` / `3.0`, `AI.PREDICT` `TabFM` with `<= 50` columns, `<= 10` classes, `~5k–8k` context rows at Tiers 0–1; Hugging Face / Vertex AI open weights `google/timesfm-3.0-pytorch` and `google/tabfm-1.0.0-pytorch` at Tiers 2–3) as additive baselines or low-latency options alongside custom-trained models (`BQML CREATE MODEL`, `LightGBM`/`XGBoost`, `PySpark`, `Meridian`), never as a blanket replacement when custom training is required.
+
+## 1. The ask
+
+> **Director of Marketing Analytics, national mobile carrier — 15+ media platforms, in-house media team** — Device upgrades and new lines are bought across fifteen platforms. Our multi-touch model, the platforms’ own numbers and our media mix model disagree by a factor of two or three. Give us one number, and feed conversions back server-side so the bidders optimise on real upgrades.
+>
+> **Commercial Analytics Lead, pharmaceutical manufacturer — one brand, DTC media plus 900 field reps** — We split promotional spend between DTC television, radio and print and a field force that details prescribers. Tell us how to allocate next year to grow new prescriptions.
+>
+> **Head of Growth, DTC skincare brand — $18M annual spend, no analytics team** — Meta says it drove 40,000 conversions last month and Google says it drove 35,000. We only had 51,000 orders. We need one model that arbitrates between the platforms and tells us the truth.
+
+**Vocabulary is unbound.** The nouns below are the method's neutral words, not this customer's — treat them as placeholders and confirm the real terms early.
+
+**The five specifics.**
+
+- **How many, of the thing being predicted** — *not captured. Ask.*
+- **How much history there is, and how much arrives** — *not captured. Ask.*
+- **The deadline the run has to hit** — *not captured. Ask.*
+- **What being wrong costs, per event or per year** — *not captured. Ask.*
+- **Who owns the decision, and who would run this** — *not captured. Ask.*
+
+## 2. Where discovery landed
+
+- **Floor: Tier 1 — Serverless, In-Warehouse** — set by Which number is the budget graded on, and who produces it, What does an advert actually land on here, How many channels to separate, over how many weeks, Can they say what was spent in one market in one week, Will they switch spend off somewhere, and can they name it, What each channel is assumed to return, and who signs it, What actually changes when the number arrives, Who is measured on the answer this produces
+- **Ceiling:** nothing heard yet rules out the top of the ladder
+
+## 3. What was asked, and what it steered
+
+### 1. Which number is the budget graded on, and who produces it
+
+**Asked:** When someone says the advertising worked, which number are they pointing at — and who produced that number?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** We buy it from a data provider. It lands a few weeks later.
+- **Which means:** The outcome is a purchased feed with a lag and a correction history, and neither is under your control. It rules out any fast loop, and it means a quarterly refit silently changes last quarter’s answer when corrections land.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** Outcome: purchased feed, lagged, corrected after publication.
+- **Why it was asked:** It decides whether there is anything to model at all. A number produced by the sellers cannot be used to grade the sellers, and a number bought from outside brings a lag and a correction history with it.
+- **What it forecloses:** The common opening move of building against whatever the reporting deck already shows. Half the time that deck is the platforms’ own output, and modelling it just launders it.
+
+### 2. What does an advert actually land on here
+
+**Asked:** When one of these adverts lands, what does it land on — a home, a phone, a named doctor, a sales patch?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** A named doctor, or a named account, visited by our own staff.
+- **Which means:** Two exposure units in one budget. The personal half has a cost per visit, a reach curve and a point where more stops helping like any other channel, but is almost always left out of the media table. It also has a compliance owner.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** Two exposure units: broadcast and personal. Model both or say why not.
+- **Why it was asked:** It fixes the shape of every row in the table and the unit any switch-off test has to be randomised over. Get it wrong and the switch-off test and the model are measuring different things.
+- **What it forecloses:** The assumption that this is a consumer advertising problem. In several industries the largest line of spend is people visiting other people, and that never appears in a media plan.
+
+### 3. How many channels to separate, over how many weeks
+
+**Asked:** How many channels do you want told apart, and how many weeks of history sit behind them at one stable definition?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** Three years of weeks, and under ten things to separate.
+- **Which means:** Comfortably identifiable at national level. Meridian’s own guidance wants three years of weekly national history, or two if you have it by market, and this clears it.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** History adequate at national level. Fit is viable.
+- **Why it was asked:** It is a division you can do on a napkin in the meeting, and it decides whether a fitted model is possible before any product is chosen.
+- **What it forecloses:** The entire build conversation when the answer is small, which is more often than anyone expects and is the most valuable thing you can say that day.
+
+### 4. Can they say what was spent in one market in one week
+
+**Asked:** Can you tell me what was spent in one named market in one named week, or only the national total?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** Yes, spend and sales both come out by market and week.
+- **Which means:** Rare and worth saying out loud as a strength. The geographic cut is available immediately, which multiplies the rows and makes a switch-off test readable.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** Spend and sales both available per market per week.
+- **Why it was asked:** It caps the model. National-only spend means a national model however good the sale data is, and that is the single most common blocker on this problem.
+- **What it forecloses:** The plan that assumes the geographic cut is available because the sales data has it. Sales are almost always finer than spend, and spend is the side that has to be bought back from the agency.
+
+### 5. Will they switch spend off somewhere, and can they name it
+
+**Asked:** Will you stop advertising in some places, on purpose, for a set number of weeks — and can you name the places?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** In principle yes, but we have never actually done it.
+- **Which means:** Willingness in principle is not a plan, and the gap between them is where this programme usually dies. Turn it into named markets, named weeks and a named signature in the first phase, or the second rung never arrives.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** Willing but unplanned. Convert to a signed design in phase one.
+- **Why it was asked:** Nothing else separates the rungs this cleanly. If spend never stops anywhere, every number you produce is a correlation in good clothing and no modelling choice repairs it.
+- **What it forecloses:** The argument about which model to build. A signed plan to go dark is worth more than every specification decision on this page put together.
+
+### 6. What each channel is assumed to return, and who signs it
+
+**Asked:** Before any data is fitted, what does the business already assume each channel returns — and who would put their name to that assumption?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** Finance has planning assumptions and will stand behind them.
+- **Which means:** The strongest position. Show finance the assumptions with no data attached and ask whether they would defend them; if yes, the model has a governance owner outside marketing before it has an answer.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** Assumptions owned and signed by finance, before the fit.
+- **Why it was asked:** When spend has barely moved, those starting assumptions do most of the work in the answer. That makes them a governance item rather than a setting.
+- **What it forecloses:** The quiet edit: an assumption nudged after somebody saw the result it changes, with no record that it moved.
+
+### 7. Has any number here ever been scored against an experiment
+
+**Asked:** Of the numbers you already have, has any one of them ever been checked against a real experiment?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** No. They just disagree and we argue about it.
+- **Which means:** The finding, and it is worth more than a fourth number would be. Three unscored estimates disagreeing by two or three times is not a modelling problem; it is the absence of any check, and that reframes the entire engagement.
+- **Bounds:** not below Tier 0 — Out of the Box
+- **For the brief:** No number ever scored. Reframe from arbitration to measurement.
+- **Why it was asked:** It tells you whether this is a measurement programme or a reporting one, and the answer is usually the most valuable slide you will produce all engagement.
+- **What it forecloses:** The request to arbitrate between existing numbers. None of them has been scored, so there is nothing to arbitrate with.
+
+### 8. What actually changes when the number arrives
+
+**Asked:** When the number arrives, what physically changes — a plan, a booking, a call schedule, a bidder?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** A quarterly reallocation between the big channels.
+- **Which means:** The common and comfortable case. A monthly refit against a quarterly decision is the right rhythm, and a human being the mechanism that moves the budget is entirely appropriate here.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** Quarterly reallocation. Monthly refit, human hand-off.
+- **Why it was asked:** It decides the cadence and the shape of the output, and whether any of the fast machinery on the upper rung is needed at all.
+- **What it forecloses:** The build that answers faster than the organisation can act, which is most of the over-engineering on this problem.
+
+### 9. Who is measured on the answer this produces
+
+**Asked:** Who is measured on the answer — and do they report to the person who reads it out?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** A separate analytics function reporting to finance.
+- **Which means:** The structural condition for this working at all. It does not guarantee agreement, but it means disagreements are argued on the evidence rather than settled by reporting lines.
+- **Bounds:** not below Tier 1 — Serverless, In-Warehouse
+- **For the brief:** Readout independent of spend ownership. Note it as a strength.
+- **Why it was asked:** It predicts whether the model gets used or litigated, and it is the question most likely to be skipped because it is uncomfortable.
+- **What it forecloses:** The technically excellent programme that dies in its second quarter because the number moved someone’s budget and they owned the analyst.
+
+### 10. Whose data is outside the company, and what may cross
+
+**Asked:** Is there data you need that belongs to somebody else, and what are you actually allowed to see of it?
+
+*Keystone — this one opens or closes branches of everything below.*
+
+- **Heard:** Everything we need is ours already.
+- **Which means:** Then skip the whole subject. A large amount of architecture on this problem exists to solve a constraint plenty of customers do not have.
+- **Bounds:** not below Tier 0 — Out of the Box
+- **For the brief:** No partner data. No shared environment needed.
+- **Why it was asked:** It decides whether a privacy-preserving join is architecture or theatre, and which product it is — the wrong one is the commonest naming error on this problem.
+- **What it forecloses:** The expensive shared environment built for a row-level join that was never going to be permitted.
+
+## 4. Still worth asking
+
+**These are instructions, not blanks.** Ask each one. The possible answers below are authored, with what each would rule in or out, so a reply can be recognised rather than interpreted.
+
+### 11. How much does that bought number move after it is first published, and how would you know?
+
+**Ask:** How much does that bought number move after it is first published, and how would you know?
+
+**Why it matters:** It sets whether a refit can be compared with the last one at all. If two months of history quietly change under you, a channel that appears to have moved may only have been recut.
+
+What the answers would mean:
+
+- **We keep every version as it arrived, dated.** → Unusual and valuable. You can refit on what was known at the time, and you can show a channel owner whether their channel moved or the data underneath it did. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **The provider resends and we overwrite the table.** → History is being rewritten every load, and nobody can reconstruct what the model saw last quarter. This is a one-sprint fix and it must happen before the first refit, not after the first argument. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Nobody has checked whether it changes.** → Diff two loads a month apart before you promise anything. It takes an hour and it occasionally kills the whole approach.
+
+### 13. What does one visit cost you, all in, and can you count visits per market per week?
+
+**Ask:** What does one visit cost you, all in, and can you count visits per market per week?
+
+**Why it matters:** It decides whether the personal half of the budget can enter the model as a treatment at all, or has to sit outside it as an apology.
+
+What the answers would mean:
+
+- **The call log is clean and we know the fully loaded cost.** → The personal half can enter as its own treatment with its own diminishing-returns shape, which is the whole point. Meridian carries non-advertising treatments natively, so this is a configuration decision rather than a custom model. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **We have call counts, but samples and events are elsewhere.** → Half a treatment is worse than none, because the model will attribute the missing half to whatever moved alongside it. Either assemble the whole contact picture or model contacts and say plainly that samples and events are excluded. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **We know how many staff there are, not what they did.** → Headcount divided by territory is not a treatment; it barely varies, so the model cannot separate it from the territory itself. This line of spend is unmeasurable until the contact log exists, and that is a data project, not a model. *(floor Tier 0 — Out of the Box)*
+- **The field system belongs to sales; we have never seen it.** → That access negotiation is the critical path and it is organisational. Start it in week one, because it will outlast every technical task on the plan.
+
+### 19. Who would have to sign off deliberately forgoing sales in a named market, and have they ever met you?
+
+**Ask:** Who would have to sign off deliberately forgoing sales in a named market, and have they ever met you?
+
+**Why it matters:** It decides whether the second rung is reachable this year or is a slide about next year.
+
+What the answers would mean:
+
+- **The commercial director, and yes, she is in the meeting.** → Get the design in front of her while the appetite exists. Willingness has a half-life measured in quarters and it does not survive a bad month. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **It would need to go to a committee that meets quarterly.** → Add two quarters to any plan that depends on it, and plan the Tier 1 build to stand alone in the meantime. A programme that only pays off after the committee agrees will be cancelled before it does. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Honestly, nobody would put their name to that.** → The honest answer, and the useful one. Take the second rung off the roadmap rather than leaving it there as an aspiration nobody funds, and be explicit that the ceiling is correlational. *(ceiling Tier 1 — Serverless, In-Warehouse)*
+- **We are not sure whose decision it would be.** → That ambiguity is itself the finding. Map the decision before designing anything that depends on it.
+
+### 21. How long after someone sees one of these adverts might they still act on it?
+
+**Ask:** How long after someone sees one of these adverts might they still act on it?
+
+**Why it matters:** It sets the carryover window, one of the two shapes the whole fit rests on, and it bounds how short a switch-off test can usefully be.
+
+What the answers would mean:
+
+- **Search is same-day. Television might be two months.** → Awkward: the tool takes one maximum window for every channel at once, so you are choosing the longest plausible one and letting the shorter channels fade fast within it. Say so rather than presenting it as a per-channel setting. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Everything we buy is direct response. Days, not weeks.** → A short window keeps the fit simple and lets a switch-off test read out in four weeks rather than twelve. It also means a shorter switch-off test is defensible, which materially lowers the cost of the second rung. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **The agency uses eight weeks for everything.** → An inherited default nobody has tested, and it will be defended as if it were measured. Refit at two or three windows and show how much the answer moves; that sensitivity is often the most persuasive slide in the pack. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **We have never thought about it in those terms.** → Ask how long after a campaign ends they still see an effect in the raw numbers. Non-technical people answer this well when it is put as a business question.
+
+### 22. When a switch-off test reads out, should the model be forced to match it, or allowed to argue with it?
+
+**Ask:** When a switch-off test reads out, should the model be forced to match it, or allowed to argue with it?
+
+**Why it matters:** It changes the recommendation, sometimes materially, and it is a choice the customer should make knowingly rather than inherit from a default.
+
+What the answers would mean:
+
+- **If we paid for the experiment, the model should match it.** → Defensible and easy to explain, and it makes the switch-off test the anchor of the whole exercise. The risk is a switch-off test run in an unusual period being treated as permanent truth, so tie it to the window it was measured in. *(floor Tier 2 — Distributed & Custom ML)*
+- **It should inform the model, not override the data.** → The usual default: the switch-off test pulls the answer without pinning it. Then say how hard it pulls, because a weak pull with a strong-sounding name lets everyone believe the model was validated when it was barely nudged. *(floor Tier 2 — Distributed & Custom ML)*
+- **We did not know that was a choice.** → It is the choice that most changes the output, and it is the one most often left at a default. Show both fits side by side once; the difference makes the decision for them. *(floor Tier 2 — Distributed & Custom ML)*
+- **We have not run one yet, so it has not come up.** → Decide it before the switch-off test launches, not after it reads out. Deciding afterwards means deciding while looking at the answer.
+
+### 23. What else moved the sales last year that had nothing to do with advertising?
+
+**Ask:** What else moved the sales last year that had nothing to do with advertising?
+
+**Why it matters:** It decides which outside drivers must sit in the table. Leaving out the big one is the commonest cause of a channel whose return looks impossibly good.
+
+What the answers would mean:
+
+- **Price, availability, and one big competitor launch.** → Those go in as outside drivers and the model needs them at the same level of detail as everything else, which is often the hard part. A outside driver you can only get nationally cannot help a model built by market. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Whether the insurer covers us, and how easily.** → Usually the single largest driver in the model and it is not advertising. It also moves in steps rather than smoothly, which makes it easy to confuse with a campaign, and it is often held in a spreadsheet rather than a system. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Mostly seasonality, and we always advertise into it.** → The worst case for separating anything: if advertising and the season move together, the split between them comes from the assumptions rather than the data. Simplify the seasonal shape, and check what happens to the answer when you do. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **We would have to ask around the business.** → Do exactly that, and ask commercial and supply teams rather than marketing. Marketing rarely volunteers the outside driver that explains its own best quarter.
+
+### 24. What result would make you stop believing the model?
+
+**Ask:** What result would make you stop believing the model?
+
+**Why it matters:** It separates a measurement programme from a reporting exercise, and it takes one sentence to ask.
+
+What the answers would mean:
+
+- **If a paid-off channel showed a strong return, we would stop.** → A real refutation condition, so build it in as a standing check: feed the model a channel that cannot have worked and confirm it returns roughly nothing. Run it every refit, not once. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **If the answers swung wildly between refits.** → A good instinct, and it needs a threshold before it is a rule. A channel whose return moves more than twofold between consecutive refits is telling you the fit is unidentified, not that the market changed. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Nothing really. It is the best we have.** → Then it is reporting, and the honest move is to price and present it as reporting. A model that cannot fail will be used to justify decisions already made, and everyone in the room will eventually know it. *(ceiling Tier 1 — Serverless, In-Warehouse)*
+- **That is a good question. Nobody has asked it.** → Agree one before the first refit. Agreed afterwards, it will be agreed by whoever is least happy with the number.
+
+### 25. When the answer for a channel comes back as somewhere between minus a bit and plus a lot, what happens?
+
+**Ask:** When the answer for a channel comes back as somewhere between minus a bit and plus a lot, what happens?
+
+**Why it matters:** Every honest output here is a range rather than a number, so the rule for an uncertain one must be agreed before any of them exists.
+
+What the answers would mean:
+
+- **We would leave the budget where it is and go and test it.** → Exactly right, and it makes uncertainty productive rather than embarrassing: an unreadable channel becomes the next candidate for a switch-off test. The newer tooling will even nominate which channel would gain most from being tested. *(floor Tier 2 — Distributed & Custom ML)*
+- **We would use the middle of the range and move on.** → This is how a range becomes a false certainty. It is not always wrong, but it must be a stated rule agreed in advance, with the band the model believes printed beside it. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **The channel owner would push back until it moved.** → The single most common failure on this problem, and it is organisational. Whoever reads the number out must not report to whoever is measured on it, and the rule for uncertain results has to exist in writing beforehand. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **It has not come up because we have never shown a range.** → Then start showing ranges immediately, before any budget depends on one. The first range presented after a reallocation looks like an excuse; the tenth looks like rigour.
+
+### 27. How much of next year’s budget is already committed before anyone sees a number?
+
+**Ask:** How much of next year’s budget is already committed before anyone sees a number?
+
+**Why it matters:** It bounds what any recommendation can move, and therefore what the whole programme can be worth.
+
+What the answers would mean:
+
+- **Most of it can move with a few weeks’ notice.** → Unusual, and it raises the value of everything here. Recommendations can be acted on within the year rather than filed for the next planning round. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Television and the big deals are locked a year ahead.** → The model informs next year’s commitments, not this year’s. That is fine, and it should reset expectations about cadence: an annual decision does not need a monthly refit or anything faster. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Every channel has minimums nobody will breach.** → Those minimums are constraints the optimiser must carry, or it will recommend zero for a channel that contractually cannot go to zero and lose the room in one slide. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **Procurement would know what is committed.** → Get the list before the first recommendation. A recommendation that ignores the commitments is worse than no recommendation, because it costs you credibility you needed later.
+
+### 29. Are the platform numbers you receive partly estimated for visitors who refused tracking?
+
+**Ask:** Are the platform numbers you receive partly estimated for visitors who refused tracking?
+
+**Why it matters:** It decides whether your inputs are counted or estimated on your behalf, and nothing downstream carries a label saying which.
+
+What the answers would mean:
+
+- **Yes, a good share of European numbers are estimated.** → You are fitting a model on top of somebody else’s model, and the two sets of assumptions compound invisibly. It is workable if stated, and it is another argument for grading against your own sales instead. *(floor Tier 1 — Serverless, In-Warehouse)*
+- **We are outside Europe and it is all directly counted.** → Simpler, but check the assumption rather than accepting it, because consent requirements arrive by region and by platform and nobody sends a memo to the analytics team. *(floor Tier 0 — Out of the Box)*
+- **We did not know that was happening.** → Very common. Check each platform’s settings before treating any reported figure as a count of real events.
+
+## 5. Not worth asking yet
+
+Each of these is gated behind a branch that is not open. They are listed so the absence is legible: they were not forgotten, they were ruled out.
+
+- **Do you already send your own sales back to those platforms?** — closed by *Which number is the budget graded on, and who produces it* → “We buy it from a data provider. It lands a few weeks later”.
+- **Which channels could be reported as one family without anyone losing a decision they actually make?** — closed by *How many channels to separate, over how many weeks* → “Three years of weeks, and under ten things to separate”.
+- **Do your big markets and small ones behave alike enough to borrow strength from each other?** — closed by *How many channels to separate, over how many weeks* → “Three years of weeks, and under ten things to separate”.
+- **Who would re-cut three years of spend to market and week, and what would they charge?** — closed by *Can they say what was spent in one market in one week* → “Yes, spend and sales both come out by market and week”.
+- **How large an effect would that design actually be able to see, given how much these markets normally bounce around?** — closed by *Will they switch spend off somewhere, and can they name it* → “In principle yes, but we have never actually done it”.
+- **What could still reach a switched-off market that nobody in this room controls?** — closed by *Will they switch spend off somewhere, and can they name it* → “In principle yes, but we have never actually done it”.
+- **Has the field ever varied by market for any other reason — a vacancy, a reorganisation, a staggered rollout?** — closed by *Will they switch spend off somewhere, and can they name it* → “In principle yes, but we have never actually done it”.
+- **How quickly does a sale actually have to reach the platform — seconds, an hour, overnight?** — closed by *What actually changes when the number arrives* → “A quarterly reallocation between the big channels”.
+- **What is the smallest group the partner will report on, and how small are your markets?** — closed by *Whose data is outside the company, and what may cross* → “Everything we need is ours already”.
+
+## 6. What is being suggested, and why the alternatives are out
+
+### Tier 1 — Serverless, In-Warehouse
+
+One weekly table, and a model fitted on it
+
+- **What it is:** Data Transfer Service, Cortex pipelines, file drops → Cortex for Meridian or Dataform → Meridian in Colab Enterprise
+- **Google Cloud & open-weight options at this rung:** BigQuery, BigQuery Data Transfer Service, Cortex Framework, Cortex for Meridian, Cloud Storage, Dataform, dbt, Colab Enterprise, Workflows, Meridian
+- **What it carries:** Place unchanged at none from Tier 0. What changed is the build: a fitted model now exists and a schedule runs the cells.
+- **Why here:** Cortex for Meridian is the shortcut most CEs miss: one config flag provisions the weekly cross-media view, a Colab Enterprise runtime template, a Workflow that executes the notebook and writes results to Cloud Storage. Weeks of plumbing become a deployment.
+- **Where it breaks:** The prebuilt view covers four platform families and takes sales from SAP, Oracle EBS or your own table; anything wider is custom. Correlational, and the starting assumptions do the work nobody audits. No minimum history is published; count rows per channel.
+- **What would move it up:** The organisation will withhold spend in named markets or territories for eight weeks and can name them — a signed plan, not willingness in principle.
+
+#### Architecture Decision Record (ADR) Matrix
+
+A scenario-aware evaluation of the ladder against this customer's constraints. Where an adjacent tier serves as a viable A/B benchmark or a Phase 2 evolution, that role is explicitly called out:
+
+| Rung | Role in this Engagement | Architecture & Stance | Deciding Constraint & Trade-off |
+| --- | --- | --- | --- |
+| Tier 0 — Out of the Box | **Adjacent Lower Tier (A/B Benchmark)** | Run the experiments they have already paid for. Lower complexity and operational overhead. | Below the floor (Tier 1 — Serverless, In-Warehouse), set by Which number is the budget graded on, and who produces it, What does an advert actually land on here, How many channels to separate, over how many weeks, Can they say what was spent in one market in one week, Will they switch spend off somewhere, and can they name it, What each channel is assumed to return, and who signs it, What actually changes when the number arrives, Who is measured on the answer this produces. Viable as an A/B comparator to quantify the performance/accuracy lift of Tier 1 — Serverless, In-Warehouse. |
+| Tier 1 — Serverless, In-Warehouse | **Primary Baseline (MVP)** | One weekly table, and a model fitted on it. Fits all bounded constraints. | Selected target. Fits floor (Tier 1 — Serverless, In-Warehouse). Wins: Cortex for Meridian is the shortcut most CEs miss: one config flag provisions the weekly cross-media view, a Colab Enterprise runtime template, a Workflow that executes the notebook and writes results to Cloud Storage. Weeks of plumbing become a deployment. |
+| Tier 2 — Distributed & Custom ML | **Adjacent Higher Tier (Phase 2 Evolution)** | A switch-off test the model has to answer to. Higher freshness, lower latency, or specialised modeling. | Inside the range, but nothing heard requires it yet. Step-up trigger: The organisation will withhold spend in named markets or territories for eight weeks and can name them — a signed plan, not willingness in principle. Propose as Phase 2 expansion once this condition is met. |
+| Tier 3 — Real-Time & Specialised | In range, not required | Always-on testing inside a closed budget loop. | Not ruled out, but nothing heard in the room requires it. |
+
+**What a build at this rung is made of.** One place to store it and one engine to work it. The data is in the warehouse, the model is SQL, and the schedule is a line in a timetable.
+
+The menu at this rung, not this design. Each line says what that component is doing *here* -- several of them appear at other rungs doing something else.
+
+- **Where the data sits still** — Whether one copy can serve every reader, or whether you have just signed up to keep two copies honest.
+    - **BigQuery standard tables** — The table the model trains on, and the scored table it writes.
+    - **Apache Iceberg managed tables** — The landing table when a second engine also reads it.
+    - **Cloud Storage and object tables** — SQL reaches unstructured files through a table of pointers.
+    - **External tables and BigQuery Omni** — Query it in place to find out whether it is worth landing.
+- **How the data gets there** — Whether anything genuinely has to stream, or whether the customer said real time and meant this morning.
+    - **Data Transfer Service** — The landing job for a source somebody else already publishes.
+    - **Datastream** — Change capture into the warehouse on a rung where nothing streams.
+    - **Pub/Sub** — A subscription lands messages in a table with no pipeline to run.
+- **Where the logic runs** — Whether the work fits in SQL. Nearly everything else about the build follows from that one answer.
+    - **BigQuery SQL and BigQuery ML** — The whole build: the transform, the model and the scoring.
+    - **BigQuery DataFrames** — A notebook step inside an otherwise SQL build.
+- **What makes it run in order** — Whether this is a timetable or a graph. A graph with a gate in it is a different product from a cron line.
+    - **Scheduled queries** — The whole schedule, while the build is still one statement.
+    - **Dataform** — The default sequencer at this rung.
+    - **BigQuery pipelines** — A scheduled run that is not purely SQL.
+    - **Cloud Scheduler, Workflows and Eventarc** — A trigger for a job that has no graph around it.
+- **How the answer reaches whoever acts** — Who or what acts on the answer, and whether they can read the place you were going to put it.
+    - **A scored table plus Looker** — The scored table, read by whoever acts on it.
+    - **BigQuery sharing** — How the scored table reaches a team that is not yours.
+    - **A push into the operational system** — A scheduled export into the system that acts.
+- **The database the business already runs on** — The read shape at the moment of decision. A key lookup, a real query and a nearest-match are three stores.
+    - **Cloud SQL** — Where a scheduled push puts the answer.
+
+**Who operates it.** The team that already writes the SQL. Nothing new to run, and the failure they actually fear is the job silently not running at all.
+
+**Below it, and why that is not enough.**
+
+- Tier 0 — Out of the Box — Run the experiments they have already paid for. Out: the floor is Tier 1 — Serverless, In-Warehouse — Which number is the budget graded on, and who produces it, What does an advert actually land on here, How many channels to separate, over how many weeks, Can they say what was spent in one market in one week, Will they switch spend off somewhere, and can they name it, What each channel is assumed to return, and who signs it, What actually changes when the number arrives, Who is measured on the answer this produces.
+
+**Above it, and why that is theatre here.**
+
+- Tier 2 — Distributed & Custom ML — A switch-off test the model has to answer to. Out: not ruled out, but nothing heard in the room requires it.
+- Tier 3 — Real-Time & Specialised — Always-on testing inside a closed budget loop. Out: not ruled out, but nothing heard in the room requires it.
+
+**Below the rung sit the calls no rung makes for you.** The tier does not settle these, and a design that has not stated them has not been made. Nothing on the page asks for them, so they travel unanswered.
+
+- **What one row is** — One row is one national week, or one market in one week. The same answer fixes what a switch-off test can be randomised over, so this is the experiment design as much as the table, and spend is the side that decides it.
+  Options: National, one row per week · One market, one week · The sales patch, not the broadcast market
+- **What goes in beside the past** — The own past is only the baseline — what would have sold anyway. What tells channels apart sits beside it: spend lines, exposure, the outside drivers. Leaving out the big outside driver is what makes a return look impossibly good.
+  Options: Spend lines only · Spend plus the outside drivers that confound · Exposure alongside spend
+- **One fit, one each, or one per group** — Two hundred markets can be one national fit, a fit per market, or one fit with market levels inside it so the small ones borrow shape from the big ones. Meridian does the third, and how far the borrowing goes is yours.
+  Options: One national fit · Borrow across all markets · Tiers of market, or the largest apart
+- **Which methods get a run** — A Bayesian fit with carryover and diminishing returns, a plain regression on the same columns, and a switch-off readout that fits no media model at all. They answer different questions, and only the third one has a control.
+  Options: Meridian, the Bayesian fit · A plain regression on the same columns · A readout with no media model
+- **How you would know** — Nothing here has a held-back answer key, so fit statistics mislead: a model can reproduce history exactly and still be wrong about every channel. Proof is an experiment the fit never saw, or things that ought to return nothing.
+  Options: Agreement with a switch-off test it never saw · A refutation battery on every refit · Reproducing history, plus sensitivity
+- **What tuning is worth** — Tuning is not settings on this problem. It is the starting assumptions about what each channel returns, and when spend has barely moved they do most of the work in the answer. That makes them governance, not a knob.
+  Options: Take the defaults · Elicit and sign them before the fit · Search the shapes and publish the spread
+- **One winner, or several combined** — The ask is often to average three numbers that disagree, and averaging figures each seller produced about its own work fixes nothing. The real call is narrower: does one signed fit carry the recommendation, or the spread across a grid?
+  Options: One signed fit, the grid beside it · The envelope across the grid
+- **Making the numbers agree** — The fitted return for a channel, the switch-off test readout on that channel, and what the sellers report they drove will not add up. Which one moves is a choice, and it is usually inherited from a default.
+  Options: The switch-off test binds the fit · The switch-off test pulls; record how hard · Publish both and let them differ
+
+**Dataset for the build.** Every workshop build runs on public or shipped tables:
+
+- **Source:** Shipped Apache-2.0 CSVs + loader
+- **Tables:** `.mmm_workshop.geo_all_channels`, `.mmm_workshop.national_all_channels`, `.mmm_workshop.geo_holdout_experiment`
+- **Grain & size:** One row per market-week (geo, time, five paid channel spend and impression columns, Organic_channel0_impression, Promo, controls, conversions, revenue_per_conversion, population); 40 markets across 156 weeks (6,240 rows) plus an 8-week 20-market switch-off test.
+- **Target / label:** Weekly conversions and revenue per market, evaluated by incremental return per dollar against the 8-week market switch-off lift.
+- **Tier 1 / Tier 2 build:** Hard Tier 1 builds geometric carryover and diminishing-returns transforms in BigQuery SQL with LINEAR_REG to diagnose channel co-movement (r = 0.27–0.70) and Promo confounding; Tier 2 fits a pooled market model (google-meridian or PyMC) anchored to the 8-week switch-off test.
+- **Caveat:** Fitting a plain linear regression without carryover, diminishing returns, or the Promo control credits the promotional spike to paid media and misses diminishing returns on the largest channel.
+- **Setup / verify:** `uv run python labs/data/marketing-measurement/load_to_bq.py --project $GOOGLE_CLOUD_PROJECT`
+- **Agent skills (`bigquery-data-science` & Data Agent Kit):** `uvx bigquery-data-science lookup LINEAR_REG # BQDS: AI.FORECAST, ML.CORRELATION, ARIMA_PLUS_XREG, ML.WEIGHTS, ML.EVALUATE | Data Agent Kit: bigquery-data-transfer-service, dataform-bigquery, bigquery-ai-ml, ml-best-practices, gcp-managed-airflow-dag-authoring`
+
+**The ladder, for reference.** No site is needed to read the tiers above.
+
+- **Tier 0 — Out of the Box** — A model somebody else trained already answers the question. Nothing to fit, nothing to provision, and the bill starts on the first query. The most senior move in the room is often to say so.
+- **Tier 1 — Serverless, In-Warehouse** — Bring the model to the data. No cluster, no container, no serving stack. SQL is the interface.
+- **Tier 2 — Distributed & Custom ML** — The transformation or the model outgrew SQL. Bring distributed compute to the data, keep the storage where it is.
+- **Tier 3 — Real-Time & Specialised** — A hard SLA or a custom objective justifies owning the stack. You are now engineering a system, not training a model.
+- **Tier 4 — Hardening for High-Stakes Operation** — Not a rung you buy. It is what changes about a system already at Tier 1, 2 or 3 once being wrong is expensive, contested or unsafe — and what changes is different for every problem in Discovery.
+
+## 7. POC Data Discovery & Profiling Contract (Tier 1)
+
+- **Source Tables (`bigquery-region: "US"`):** `.mmm_workshop.geo_all_channels`, `.mmm_workshop.national_all_channels`, `.mmm_workshop.geo_holdout_experiment`
+- **Grain & Target:** One row per market-week (geo, time, five paid channel spend and impression columns, Organic_channel0_impression, Promo, controls, conversions, revenue_per_conversion, population); 40 markets across 156 weeks (6,240 rows) plus an 8-week 20-market switch-off test. | Weekly conversions and revenue per market, evaluated by incremental return per dollar against the 8-week market switch-off lift.
+- **Data Caveat to Profile & Guard Against:** Fitting a plain linear regression without carryover, diminishing returns, or the Promo control credits the promotional spike to paid media and misses diminishing returns on the largest channel.
+- **Verification Command:** `uv run python labs/data/marketing-measurement/load_to_bq.py --project $GOOGLE_CLOUD_PROJECT`
+
+---
+
+### The same thing, for a program to read
+
+```json
+{
+  "problem": "marketing-measurement",
+  "ldap": "classroom-repo",
+  "version": 1,
+  "served_at": "2026-10-27T00:00:00Z",
+  "binding": {
+    "medium": "channel",
+    "market": "market",
+    "purchase": "sale",
+    "interval": "week",
+    "recipient": "household",
+    "sponsor": "channel owner",
+    "test": "switch-off test",
+    "sway": "outside driver"
+  },
+  "range": {
+    "floor": 1,
+    "ceiling": 1,
+    "clash": false
+  },
+  "recommended_rung": 1,
+  "data": {
+    "source": "Shipped Apache-2.0 CSVs + loader",
+    "tables": [
+      ".mmm_workshop.geo_all_channels",
+      ".mmm_workshop.national_all_channels",
+      ".mmm_workshop.geo_holdout_experiment"
+    ],
+    "grain": "One row per market-week (geo, time, five paid channel spend and impression columns, Organic_channel0_impression, Promo, controls, conversions, revenue_per_conversion, population); 40 markets across 156 weeks (6,240 rows) plus an 8-week 20-market switch-off test.",
+    "label": "Weekly conversions and revenue per market, evaluated by incremental return per dollar against the 8-week market switch-off lift.",
+    "rungs": "Hard Tier 1 builds geometric carryover and diminishing-returns transforms in BigQuery SQL with LINEAR_REG to diagnose channel co-movement (r = 0.27–0.70) and Promo confounding; Tier 2 fits a pooled market model (google-meridian or PyMC) anchored to the 8-week switch-off test.",
+    "caveat": "Fitting a plain linear regression without carryover, diminishing returns, or the Promo control credits the promotional spike to paid media and misses diminishing returns on the largest channel.",
+    "setup": "uv run python labs/data/marketing-measurement/load_to_bq.py --project $GOOGLE_CLOUD_PROJECT",
+    "skills": "uvx bigquery-data-science lookup LINEAR_REG # BQDS: AI.FORECAST, ML.CORRELATION, ARIMA_PLUS_XREG, ML.WEIGHTS, ML.EVALUATE | Data Agent Kit: bigquery-data-transfer-service, dataform-bigquery, bigquery-ai-ml, ml-best-practices, gcp-managed-airflow-dag-authoring"
+  },
+  "questions": [
+    {
+      "id": "graded",
+      "order": 1,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "bought",
+        "heard": "We buy it from a data provider. It lands a few weeks later.",
+        "means": "The outcome is a purchased feed with a lag and a correction history, and neither is under your control. It rules out any fast loop, and it means a quarterly refit silently changes last quarter’s answer when corrections land.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "unit",
+      "order": 2,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "person",
+        "heard": "A named doctor, or a named account, visited by our own staff.",
+        "means": "Two exposure units in one budget. The personal half has a cost per visit, a reach curve and a point where more stops helping like any other channel, but is almost always left out of the media table. It also has a compliance owner.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "width",
+      "order": 3,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "plenty",
+        "heard": "Three years of weeks, and under ten things to separate.",
+        "means": "Comfortably identifiable at national level. Meridian’s own guidance wants three years of weekly national history, or two if you have it by market, and this clears it.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "spendgrain",
+      "order": 4,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "both",
+        "heard": "Yes, spend and sales both come out by market and week.",
+        "means": "Rare and worth saying out loud as a strength. The geographic cut is available immediately, which multiplies the rows and makes a switch-off test readable.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "switch",
+      "order": 5,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "willing",
+        "heard": "In principle yes, but we have never actually done it.",
+        "means": "Willingness in principle is not a plan, and the gap between them is where this programme usually dies. Turn it into named markets, named weeks and a named signature in the first phase, or the second rung never arrives.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "beliefs",
+      "order": 6,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "finance",
+        "heard": "Finance has planning assumptions and will stand behind them.",
+        "means": "The strongest position. Show finance the assumptions with no data attached and ask whether they would defend them; if yes, the model has a governance owner outside marketing before it has an answer.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "scored",
+      "order": 7,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "never",
+        "heard": "No. They just disagree and we argue about it.",
+        "means": "The finding, and it is worth more than a fourth number would be. Three unscored estimates disagreeing by two or three times is not a modelling problem; it is the absence of any check, and that reframes the entire engagement.",
+        "floor": 0,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "decision",
+      "order": 8,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "quarterly",
+        "heard": "A quarterly reallocation between the big channels.",
+        "means": "The common and comfortable case. A monthly refit against a quarterly decision is the right rhythm, and a human being the mechanism that moves the budget is entirely appropriate here.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "arbiter",
+      "order": 9,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "independent",
+        "heard": "A separate analytics function reporting to finance.",
+        "means": "The structural condition for this working at all. It does not guarantee agreement, but it means disagreements are argued on the evidence rather than settled by reporting lines.",
+        "floor": 1,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "partner",
+      "order": 10,
+      "status": "answered",
+      "keystone": true,
+      "answer": {
+        "key": "none",
+        "heard": "Everything we need is ours already.",
+        "means": "Then skip the whole subject. A large amount of architecture on this problem exists to solve a constraint plenty of customers do not have.",
+        "floor": 0,
+        "ceiling": null
+      }
+    },
+    {
+      "id": "revision",
+      "order": 11,
+      "status": "open",
+      "options": [
+        "We keep every version as it arrived, dated.",
+        "The provider resends and we overwrite the table.",
+        "Nobody has checked whether it changes."
+      ]
+    },
+    {
+      "id": "loop",
+      "order": 12,
+      "status": "not_in_play",
+      "gate": "The graded number is what the ad platforms report",
+      "closed_by": {
+        "question": "graded",
+        "answer": "bought"
+      }
+    },
+    {
+      "id": "promotion",
+      "order": 13,
+      "status": "open",
+      "options": [
+        "The call log is clean and we know the fully loaded cost.",
+        "We have call counts, but samples and events are elsewhere.",
+        "We know how many staff there are, not what they did.",
+        "The field system belongs to sales; we have never seen it."
+      ]
+    },
+    {
+      "id": "combine",
+      "order": 14,
+      "status": "not_in_play",
+      "gate": "There are more channels than the history can separate",
+      "closed_by": {
+        "question": "width",
+        "answer": "plenty"
+      }
+    },
+    {
+      "id": "pool",
+      "order": 15,
+      "status": "not_in_play",
+      "gate": "The history exists for many markets rather than one country",
+      "closed_by": {
+        "question": "width",
+        "answer": "plenty"
+      }
+    },
+    {
+      "id": "restatecost",
+      "order": 16,
+      "status": "not_in_play",
+      "gate": "Spend exists only as a national total",
+      "closed_by": {
+        "question": "spendgrain",
+        "answer": "both"
+      }
+    },
+    {
+      "id": "power",
+      "order": 17,
+      "status": "not_in_play",
+      "gate": "A plan to go dark in named markets is already signed",
+      "closed_by": {
+        "question": "switch",
+        "answer": "willing"
+      }
+    },
+    {
+      "id": "leak",
+      "order": 18,
+      "status": "not_in_play",
+      "gate": "A plan to go dark in named markets is already signed",
+      "closed_by": {
+        "question": "switch",
+        "answer": "willing"
+      }
+    },
+    {
+      "id": "whosigns",
+      "order": 19,
+      "status": "open",
+      "options": [
+        "The commercial director, and yes, she is in the meeting.",
+        "It would need to go to a committee that meets quarterly.",
+        "Honestly, nobody would put their name to that.",
+        "We are not sure whose decision it would be."
+      ]
+    },
+    {
+      "id": "twotreat",
+      "order": 20,
+      "status": "not_in_play",
+      "gate": "Advertising can go dark but the sales force cannot",
+      "closed_by": {
+        "question": "switch",
+        "answer": "willing"
+      }
+    },
+    {
+      "id": "carry",
+      "order": 21,
+      "status": "open",
+      "options": [
+        "Search is same-day. Television might be two months.",
+        "Everything we buy is direct response. Days, not weeks.",
+        "The agency uses eight weeks for everything.",
+        "We have never thought about it in those terms."
+      ]
+    },
+    {
+      "id": "anchor",
+      "order": 22,
+      "status": "open",
+      "options": [
+        "If we paid for the experiment, the model should match it.",
+        "It should inform the model, not override the data.",
+        "We did not know that was a choice.",
+        "We have not run one yet, so it has not come up."
+      ]
+    },
+    {
+      "id": "confound",
+      "order": 23,
+      "status": "open",
+      "options": [
+        "Price, availability, and one big competitor launch.",
+        "Whether the insurer covers us, and how easily.",
+        "Mostly seasonality, and we always advertise into it.",
+        "We would have to ask around the business."
+      ]
+    },
+    {
+      "id": "refute",
+      "order": 24,
+      "status": "open",
+      "options": [
+        "If a paid-off channel showed a strong return, we would stop.",
+        "If the answers swung wildly between refits.",
+        "Nothing really. It is the best we have.",
+        "That is a good question. Nobody has asked it."
+      ]
+    },
+    {
+      "id": "zero",
+      "order": 25,
+      "status": "open",
+      "options": [
+        "We would leave the budget where it is and go and test it.",
+        "We would use the middle of the range and move on.",
+        "The channel owner would push back until it moved.",
+        "It has not come up because we have never shown a range."
+      ]
+    },
+    {
+      "id": "sla",
+      "order": 26,
+      "status": "not_in_play",
+      "gate": "The output has to reach an automated bidder",
+      "closed_by": {
+        "question": "decision",
+        "answer": "quarterly"
+      }
+    },
+    {
+      "id": "locked",
+      "order": 27,
+      "status": "open",
+      "options": [
+        "Most of it can move with a few weeks’ notice.",
+        "Television and the big deals are locked a year ahead.",
+        "Every channel has minimums nobody will breach.",
+        "Procurement would know what is committed."
+      ]
+    },
+    {
+      "id": "threshold",
+      "order": 28,
+      "status": "not_in_play",
+      "gate": "Partner data may only cross as aggregates",
+      "closed_by": {
+        "question": "partner",
+        "answer": "none"
+      }
+    },
+    {
+      "id": "modelled",
+      "order": 29,
+      "status": "open",
+      "options": [
+        "Yes, a good share of European numbers are estimated.",
+        "We are outside Europe and it is all directly counted.",
+        "We did not know that was happening."
+      ]
+    }
+  ],
+  "conflicts": [],
+  "still_to_ask": [
+    "revision",
+    "promotion",
+    "whosigns",
+    "carry",
+    "anchor",
+    "confound",
+    "refute",
+    "zero",
+    "locked",
+    "modelled"
+  ],
+  "counts": {
+    "answered": 10,
+    "stale": 0,
+    "open": 10,
+    "not_in_play": 9,
+    "dropped": 0
+  },
+  "schema_version": "1.0",
+  "problem_id": "marketing-measurement",
+  "target_tier": 1,
+  "derivation": {
+    "floor": 1,
+    "ceiling": 1,
+    "recommended_tier": 1,
+    "recommended_rung": 1,
+    "clash": false
+  }
+}
+```
