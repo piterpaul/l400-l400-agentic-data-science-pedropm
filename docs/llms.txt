@@ -1,0 +1,39 @@
+# L400 Agentic Data Science Labs — LLM Navigation Index (`llms.txt`)
+
+> Concise workspace map for AI coding agents (`agy`, Gemini CLI, Claude Code).
+
+## Core Files
+- `AGENTS.md`: Master Agent Directive, 4-Step Loop (`Discover -> Design -> Build -> Verify`), Approval Gate, and Golden Rules.
+- `agent-config.json` (gitignored, seeded from `agent-config.example.json`): Project ID (`gcp-project-id`), datasets (`citibike_tier0`, `l400_ds_work`), and 3 distinct regional keys (`bigquery-region: "US"` multi-region data plane + `spark-region: "us-central1"` for Google Cloud Managed Service for Apache Spark / Serverless Spark + `vertex-ai-region: "us-central1"` for Vertex AI Custom Jobs & Model Registry, with `us-east1`/`us-east4`/`us-west1` stockout fallback), plus selected Pass 2 problem/tier. Auto-synced from `terraform/tf-output.json` by `deploy.sh` and `01-test_terraform_infrastructure.py`.
+- `How-to-Reset-this-Project.md`: Instructions to reset BigQuery datasets and generated files while keeping Terraform infrastructure intact.
+
+## Rules (`.agents/rules/`)
+- `.agents/rules/lab_governance.md`: Approval Gate, Tier 0 first rule, and point-in-time split discipline.
+- `.agents/rules/bigquery_ai_and_ml_standards.md`: Standards and exact SQL patterns for `AI.FORECAST`, `AI.DETECT_ANOMALIES`, `AI.EVALUATE`, `AI.PREDICT` (Guided Tier 0 `citibike_tier0`), and `CREATE OR REPLACE MODEL ... TRANSFORM(...)`.
+- `.agents/rules/data_science_standards.md`: Temporal split, GroupKFold, survival censoring, and baseline comparison rules.
+- `.agents/rules/agent_skills_standards.md`: Antigravity `.agents/skills/<name>/SKILL.md` and `.agents/rules/*.md` (`12,000`-char cap) standards.
+- `.agents/rules/terraform_standards.md`: Greenfield Argolis Terraform deployment conventions.
+
+## Reusable Skills (`.agents/skills/` & Pre-Installed Workstation Plugins)
+- `discovery-pack-fetch`: Resolves `docs/discovery-pack-tier0.md` (Pass 1) and `docs/discovery-pack.md` (Pass 2) locally from the 36 built-in pre-derived packs in `.agents/skills/discovery-pack-fetch/packs/` (`scripts/run.py`).
+- `conversational-analytics-agent`: Creates and queries the BigQuery Conversational Analytics Data Agent (`scripts/run.py`), which invokes zero-training `AI.FORECAST` (`TimesFM 2.5`) and `AI.DETECT_ANOMALIES` on the fly.
+- `Data Agent Kit` (`GoogleCloudPlatform/data-agent-kit-plugin`): Pre-installed in `agy` with 12 MCP servers and 37 skills across Tiers 0–3 (`discovering-gcp-data-assets`, `data-autocleaning`, `bigquery-sql`, `bigquery-ai-ml`, `dataform-bigquery`, `bigquery-data-transfer-service`, `bigquery-graph-author`, `bigquery-graph-query`, `ml-best-practices`, `bigquery-bigframes`, `gcp-spark`, `gcp-pipeline-orchestration`, `gcp-managed-airflow-dag-authoring`, `gcp-dataflow`, `bigtable-basics`, `cloud-databases-onboarding`).
+- `bigquery-data-science` v0.10.0 (`bigquery-data-science`, `bigquery-ai`, `bigquery-ml`, `bigquery-mlops`): Installed in `.agents/skills/` (and queried via `uvx bigquery-data-science triage | lookup | search | review-sql`) — 4 composable skills covering the Umbrella Router (`ML.* vs AI.*` matrix, 10 head-to-head comparisons, 6 multi-skill playbooks), 29 `AI.*` foundation functions (`TimesFM 2.5` GA & `TimesFM 3.0` covariates via `AI.FORECAST`, `TabFM` via `AI.PREDICT`, `AI.EVALUATE`), 72 `bigquery-ml` syntax cards (`ARIMA_PLUS`, `ARIMA_PLUS_XREG`, `BOOSTED_TREE_REGRESSOR`, `RANDOM_FOREST_REGRESSOR`, `ML.EXPLAIN_FORECAST`), and `bigquery-mlops` (Vertex AI Model Registry, `EXPORT MODEL`, point-in-time feature store, drift monitoring, 8 orchestrators).
+- `build-<problem_id>` (authored by the agent in Pass 2 Checkpoint 09, e.g. `.agents/skills/build-forecasting/SKILL.md` + `scripts/`): Packages your approved root `DESIGN.md` into a reusable workspace skill for BigQuery SQL feature spine materialization (`l400_ds_work.feature_spine`) and multi-runtime cloud challenger training (`BigQuery ML`, `Managed Service for Apache Spark Serverless`, and `Vertex AI CustomJob`).
+
+## Shipped Datasets (`labs/data/` & `data/loader.py`)
+- `data/loader.py`: Unified dispatcher that loads shipped datasets into BigQuery (`US` multi-region) via `--problem predictive-maintenance` or `--problem marketing-measurement` (automatically reading `gcp-project-id` from `agent-config.json`).
+- `labs/data/predictive-maintenance/generate_and_load.py`: Deterministic Weibull + right-censoring generator (`assets`, `weekly_readings`, `work_orders`) loaded into `<project>.pdm_workshop`.
+- `labs/data/marketing-measurement/load_to_bq.py`: Google Meridian Apache-2.0 simulated geo & national panels (`geo_all_channels`, `national_all_channels`, `geo_holdout_experiment`) loaded into `<project>.mmm_workshop`.
+
+## Pass 1 Guided Tier 0 Lab (`labs/guided/citibike/`)
+- `labs/guided/citibike/README.md`: Step-by-step walkthrough for Checkpoints 01–06.
+- `docs/discovery-pack-tier0.md`: Generated in Checkpoint 02 via `discovery-pack-fetch`.
+- `labs/guided/citibike/DESIGN-tier0.md`: Generated by `agy` in Checkpoint 03.
+- `labs/guided/citibike/tier0_baseline.sql`: Generated and executed by `agy` in Checkpoints 04–05.
+- `labs/guided/citibike/tier1_trigger.md`: Generated by `agy` in Checkpoint 06 documenting when and why to escalate beyond the Tier 0 baseline based on empirical holdout evaluation.
+
+## 12-Checkpoint Verification (`lab-evaluation-verifier/`)
+- `01-test_terraform_infrastructure.py` .. `06-test_tier0_data_agent.py` (Pass 1 Guided Tier 0)
+- `07-test_discovery_pack_handover.py` .. `12-test_baseline_comparison_and_decision.py` (Pass 2 Solo Track)
+- `run-all-evals.py`: Runs all 12 checkpoints sequentially, streaming output and reporting live PASS/FAIL results.
